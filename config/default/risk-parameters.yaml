@@ -1,0 +1,41 @@
+# Risk management configuration
+# Contains risk and slippage calculation parameters
+
+risk:
+  # Slippage settings
+  slippage:
+    maxSlippagePercent: 0.3           # Maximum acceptable slippage percentage
+    baseSlippage: 0.001               # Base slippage factor used in calculations
+    spreadImpactFactor: 0.5           # Spread impact factor for slippage calculations
+    volumeNormalization: 10000.0      # Volume normalization factor for slippage calculations
+    enableSlippageHistory: true       # Enable historical slippage data recording
+    slippageHistorySize: 100          # Number of slippage observations to keep in history
+  
+  # Liquidity settings
+  liquidity:
+    lowLiquidityThreshold: 0.3        # Liquidity threshold for high risk classification
+  
+  # Volatility settings
+  volatility:
+    highVolatilityThreshold: 0.7      # Volatility threshold for high risk classification
+    priceHistorySize: 100             # Number of price points to keep for volatility calculation
+    volatilitySpikeThreshold: 3.0     # Volatility spike threshold (standard deviations)
+    marketStressThreshold: 2.5        # Market stress threshold
+
+  # Asset-specific risk adjustments  
+  assetRiskFactors:
+    BTC: 0.8     # Lower risk factor (0.0-1.0, lower means less risky)
+    ETH: 0.85
+    SOL: 0.9
+    LINK: 0.85
+    AVAX: 0.9
+    XRP: 0.95
+    ADA: 0.9
+    DOT: 0.95
+    
+  # Exchange reliability factors (0.0-1.0, higher means more reliable)
+  exchangeReliability:
+    binance: 0.95
+    coinbase: 0.93
+    kraken: 0.92
+    bybit: 0.90 

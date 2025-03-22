@@ -1,0 +1,60 @@
+# Exchange configuration
+# Contains exchange-specific settings
+
+exchanges:
+  # Base fee rates for each exchange (default is maker rate)
+  baseFees:
+    binance: 0.001   # 0.1%
+    coinbase: 0.006  # 0.6% 
+    kraken: 0.0026   # 0.26%
+    bybit: 0.001     # 0.1%
+  
+  # API base URLs 
+  apiUrls:
+    binance: "https://api.binance.com"
+    coinbase: "https://api.coinbase.com"
+    kraken: "https://api.kraken.com"
+    bybit: "https://api.bybit.com"
+  
+  # WebSocket URLs
+  wsUrls:
+    binance: "wss://stream.binance.com:9443/ws"
+    coinbase: "wss://ws-feed.exchange.coinbase.com"
+    kraken: "wss://ws.kraken.com"
+    bybit: "wss://stream.bybit.com/realtime"
+  
+  # API rate limits (requests per minute)
+  rateLimits:
+    binance: 1200
+    coinbase: 300
+    kraken: 60
+    bybit: 600
+  
+  # Connection timeouts (milliseconds)
+  connectionTimeouts:
+    binance: 30000
+    coinbase: 30000
+    kraken: 30000
+    bybit: 30000
+  
+  # Enable/disable exchanges
+  enabled:
+    binance: true
+    coinbase: true
+    kraken: true
+    bybit: true
+  
+  # Exchange-specific settings
+  binance:
+    useTestnet: false
+    bnbDiscount: false
+    socketTimeout: 60000
+    
+  coinbase:
+    useAdvancedTrade: true
+    
+  kraken:
+    useRestApi2: true
+    
+  bybit:
+    useV5Api: true 

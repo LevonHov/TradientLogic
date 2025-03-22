@@ -1,0 +1,50 @@
+# Trading limits configuration
+# Contains position sizing and trading limit parameters
+
+trading:
+  # General limits
+  limits:
+    maxDailyTradeCount: 1000           # Maximum number of trades per day
+    maxDailyVolume: 1000000.0          # Maximum daily trading volume
+    maxPositionSizePerAsset: 50000.0   # Maximum position size per asset
+    minOrderSize: 10.0                 # Minimum order size in base currency
+    maxOpenPositions: 50               # Maximum number of open positions
+    maxLeverageAllowed: 1.0            # Maximum allowed leverage (1.0 = no leverage)
+  
+  # Asset-specific position sizing limits
+  assetLimits:
+    BTC:
+      maxPositionSize: 50000.0
+      minOrderSize: 100.0
+    ETH:
+      maxPositionSize: 30000.0
+      minOrderSize: 50.0
+    # For micro-priced tokens, specify unit-based limits
+    SHIB:
+      maxPositionUnits: 10000000000
+      minOrderUnits: 1000000
+      
+  # Exchange-specific limits
+  exchangeLimits:
+    binance:
+      maxOrdersPerSecond: 10
+      maxOrdersPerMinute: 100
+      maxCancelRate: 90        # Maximum percentage of orders that can be cancelled
+    coinbase:
+      maxOrdersPerSecond: 5
+      maxOrdersPerMinute: 50
+    kraken:
+      maxOrdersPerSecond: 2
+      maxOrdersPerMinute: 20
+    bybit:
+      maxOrdersPerSecond: 5
+      maxOrdersPerMinute: 60
+      
+  # Position sizing parameters
+  positionSizing:
+    kellyFractionScaler: 0.5    # Scale the Kelly fraction (0.5 = half Kelly)
+    minWinRate: 0.55            # Minimum win rate to consider for position sizing
+    profitFactor: 1.5           # Required profit/loss ratio
+    maxRiskPerTrade: 0.01       # Maximum risk per trade (1% of capital)
+    incrementalSizing: true     # Increase position sizes gradually
+    riskBasedSizing: true       # Use risk-based position sizing 

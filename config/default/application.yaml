@@ -1,0 +1,35 @@
+# Application configuration
+# Contains general application settings
+
+system:
+  name: "Crypto Arbitrage System"
+  version: "1.0.0"
+  environment: "development"
+  
+  # Scheduling settings
+  scheduling:
+    arbitrageScanInterval: 5000     # Milliseconds between arbitrage scans
+    marketDataUpdateInterval: 1000  # Milliseconds between market data updates
+    maintenanceInterval: 3600000    # Milliseconds between maintenance tasks (1 hour)
+  
+  # Logging settings
+  logging:
+    level: "INFO"
+    detailedArbitrageLogging: false
+    logFilePath: "logs/"
+    includeTimestamps: true
+    
+  # Performance settings
+  performance:
+    threadPoolSize: 8
+    cacheExpirySeconds: 60
+    maxConcurrentRequests: 20
+
+# Arbitrage settings
+arbitrage:
+  minProfitPercent: 0.1            # Minimum profit percentage to consider
+  minimumSuccessRate: 70           # Minimum success rate to consider viable
+  maxPositionPercent: 0.25         # Maximum position size as percentage of capital
+  availableCapital: 100000.0       # Available capital for trading
+  minimumTradeSize: 10.0           # Minimum trade size in base currency
+  detailedLogging: false           # Enable detailed logging of arbitrage calculations 
