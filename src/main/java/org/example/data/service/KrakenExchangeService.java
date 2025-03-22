@@ -123,6 +123,50 @@ public class KrakenExchangeService extends ExchangeService {
     }
 
     /**
+     * Translates a standard symbol to Kraken's format
+     * 
+     * @param symbol Standard symbol format (e.g., BTCUSDT)
+     * @return Symbol in Kraken's format (e.g., XXBTZUSD)
+     */
+    private String translateToKrakenSymbol(String symbol) {
+        // Initialize the Kraken symbol map if it's empty
+        if (krakenSymbolMap.isEmpty()) {
+            // Common translations
+            krakenSymbolMap.put("BTCUSDT", "XXBTZUSD");
+            krakenSymbolMap.put("BTCUSD", "XXBTZUSD");
+            krakenSymbolMap.put("ETHUSDT", "XETHZUSD");
+            krakenSymbolMap.put("ETHUSD", "XETHZUSD");
+            krakenSymbolMap.put("XRPUSDT", "XXRPZUSD");
+            krakenSymbolMap.put("XRPUSD", "XXRPZUSD");
+            // Add more mappings as needed
+        }
+        
+        // Check if we have a direct mapping
+        if (krakenSymbolMap.containsKey(symbol)) {
+            return krakenSymbolMap.get(symbol);
+        }
+        
+        // Generic translation rules
+        String normalized = symbol.replace("/", "").replace("-", "").toUpperCase();
+        
+        // Standard Kraken format for major coins
+        if (normalized.startsWith("BTC")) {
+            return "XXBTZ" + normalized.substring(3);
+        } else if (normalized.startsWith("ETH")) {
+            return "XETHZ" + normalized.substring(3);
+        } else if (normalized.startsWith("XRP")) {
+            return "XXRPZ" + normalized.substring(3);
+        } else if (normalized.endsWith("USDT")) {
+            return "X" + normalized.substring(0, normalized.length() - 4) + "ZUSD";
+        } else if (normalized.endsWith("USD")) {
+            return "X" + normalized.substring(0, normalized.length() - 3) + "ZUSD";
+        }
+        
+        // Fallback for altcoins
+        return normalized;
+    }
+
+    /**
      * Retrieves the latest ticker data for the specified symbol using REST API.
      * This is used as a fallback when WebSocket data is not available.
      *
@@ -134,19 +178,25 @@ public class KrakenExchangeService extends ExchangeService {
     @Override
     protected Ticker fetchTickerDataREST(String symbol) {
         Ticker ticker = null;
-
-        // Convert to Kraken format if needed
-        String krakenSymbol = krakenSymbolMap.getOrDefault(symbol, symbol);
-
         try {
+            String krakenSymbol = translateToKrakenSymbol(symbol);
             String urlStr = BASE_URL + "/Ticker?pair=" + krakenSymbol;
+            
             URL url = new URL(urlStr);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-
-            BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-            StringBuilder responseStr = new StringBuilder();
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setRequestMethod("GET");
+            
+            int responseCode = con.getResponseCode();
+            if (responseCode != 200) {
+                logBuilder.append("Failed to fetch Kraken ticker data for ").append(symbol)
+                         .append(". Response code: ").append(responseCode).append("\n");
+                return null;
+            }
+            
+            BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
             String inputLine;
+            StringBuilder responseStr = new StringBuilder();
+            
             while ((inputLine = in.readLine()) != null) {
                 responseStr.append(inputLine);
             }
@@ -160,6 +210,29 @@ public class KrakenExchangeService extends ExchangeService {
             }
 
             JSONObject result = json.getJSONObject("result");
+            
+            // Check if the result contains our ticker symbol
+            if (!result.has(krakenSymbol)) {
+                logBuilder.append("Symbol ").append(krakenSymbol)
+                          .append(" not found in Kraken response. Available symbols: ")
+                          .append(result.keySet()).append("\n");
+                
+                // Try to find an alternative match
+                boolean found = false;
+                for (String key : result.keySet()) {
+                    if (key.contains(krakenSymbol) || krakenSymbol.contains(key)) {
+                        krakenSymbol = key;
+                        found = true;
+                        logBuilder.append("Using alternative symbol: ").append(krakenSymbol).append("\n");
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    return null;
+                }
+            }
+            
             JSONObject tickerData = result.getJSONObject(krakenSymbol);
 
             JSONArray bidData = tickerData.getJSONArray("b");
@@ -178,8 +251,7 @@ public class KrakenExchangeService extends ExchangeService {
 
         } catch (Exception e) {
             logBuilder.append("Exception in fetchTickerDataREST for symbol ").append(symbol)
-                    .append(": ").append(e.getMessage()).append("\n");
-            e.printStackTrace();
+                     .append(": ").append(e.getMessage()).append("\n");
         }
         return ticker;
     }

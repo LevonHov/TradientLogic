@@ -1,6 +1,6 @@
 package org.example.demo;
 
-import org.example.data.model.fee.*;
+import org.example.data.fee.*;
 import org.example.data.service.BinanceExchangeService;
 import org.example.data.service.CoinbaseExchangeService;
 import org.example.data.service.ExchangeService;

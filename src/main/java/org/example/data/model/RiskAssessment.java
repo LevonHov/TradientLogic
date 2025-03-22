@@ -99,6 +99,29 @@ public class RiskAssessment {
         this.predictionConfidence = confidence;
     }
     
+    /**
+     * Adds a severe warning to this risk assessment.
+     * 
+     * @param warningMessage The warning message
+     */
+    public void addSevereWarning(String warningMessage) {
+        // This is a simple implementation - in a production system,
+        // you might want to maintain a list of warnings with severity levels
+        this.setWarningIndicator("severeWarning", 1.0, 0.5);
+        
+        // If you need to store the actual message, you could add a map of warning messages
+        // For now, we'll just use the warning indicator system
+    }
+    
+    /**
+     * Sets the slippage risk score for this assessment.
+     * 
+     * @param slippageRisk The new slippage risk score
+     */
+    public void setSlippageRisk(double slippageRisk) {
+        this.slippageRisk = slippageRisk;
+    }
+    
     // Getters and setters
     
     public double getLiquidityScore() {

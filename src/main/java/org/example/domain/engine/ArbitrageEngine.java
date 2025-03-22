@@ -3,132 +3,200 @@ package org.example.domain.engine;
 import org.example.data.model.ArbitrageOpportunity;
 import org.example.data.model.TradingPair;
 import org.example.data.service.ExchangeService;
+import org.example.data.interfaces.IArbitrageEngine;
+import org.example.data.interfaces.IExchangeService;
+import org.example.data.interfaces.INotificationService;
+import org.example.data.interfaces.IRiskManager;
+import org.example.data.interfaces.ArbitrageResult;
 import org.example.domain.risk.RiskCalculator;
 
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * The ArbitrageEngine is responsible for orchestrating the process of scanning for,
- * detecting, and evaluating arbitrage opportunities across multiple exchanges.
- *
- * It leverages ExchangeService implementations to fetch market data and uses specialized
- * classes (such as ExchangeToExchangeArbitrage) to perform low-level arbitrage calculations.
- *
- * The engine then applies a risk evaluation (in this case, a simple profit threshold check)
- * and ranks the opportunities by their potential profit.
+ * Main engine for arbitrage detection across multiple exchanges.
+ * This class coordinates the detection of arbitrage opportunities across
+ * all configured exchanges and provides methods to scan for and analyze them.
  */
-public class ArbitrageEngine {
-
-    // A list of all available exchange services
-    private List<ExchangeService> exchangeServices;
-
-    // An instance of RiskCalculator used for assessing risk in opportunities
-    private RiskCalculator riskCalculator;
-
+public class ArbitrageEngine implements IArbitrageEngine {
+    
+    private final List<ExchangeService> exchanges;
+    private double minProfitThreshold;
+    private final RiskCalculator riskCalculator;
+    private final INotificationService notificationService;
+    
     /**
-     * Constructor for ArbitrageEngine.
+     * Constructor with notification service.
      *
-     * @param exchangeServices A list of ExchangeService implementations.
-     * @param riskCalculator   A RiskCalculator instance to evaluate risk.
+     * @param minProfitThreshold Minimum profit threshold for opportunities
+     * @param riskCalculator Risk calculator for opportunity assessment
+     * @param notificationService Notification service for logging
      */
-    public ArbitrageEngine(List<ExchangeService> exchangeServices, RiskCalculator riskCalculator) {
-        this.exchangeServices = exchangeServices;
+    public ArbitrageEngine(double minProfitThreshold, 
+                         RiskCalculator riskCalculator,
+                         INotificationService notificationService) {
+        this.exchanges = new ArrayList<>();
+        this.minProfitThreshold = minProfitThreshold;
         this.riskCalculator = riskCalculator;
+        this.notificationService = notificationService;
     }
-
+    
     /**
-     * Orchestrates the scanning process.
-     * It gathers data from all exchanges, detects arbitrage opportunities,
-     * evaluates them based on risk, and then ranks the acceptable ones.
-     */
-    public void scanForOpportunities() {
-        // Aggregate opportunities from different detection strategies
-        List<ArbitrageOpportunity> opportunities = new ArrayList<>();
-
-        // Detect exchange-to-exchange arbitrage opportunities
-        opportunities.addAll(detectExchangeToExchangeArbitrage());
-
-        // Detect triangle arbitrage opportunities (future extension; currently returns empty list)
-        opportunities.addAll(detectTriangleArbitrage());
-
-        // Evaluate and rank the aggregated opportunities based on risk and profit potential
-        evaluateAndRankOpportunities(opportunities);
-    }
-
-    /**
-     * Iterates over all pairs of exchange services and their trading pairs to detect
-     * arbitrage opportunities based on exchange-to-exchange price discrepancies.
+     * Simple constructor without notification service.
      *
-     * @return A list of detected ArbitrageOpportunity instances.
+     * @param minProfitThreshold Minimum profit threshold for opportunities
+     * @param riskCalculator Risk calculator for opportunity assessment
      */
-    public List<ArbitrageOpportunity> detectExchangeToExchangeArbitrage() {
+    public ArbitrageEngine(double minProfitThreshold, RiskCalculator riskCalculator) {
+        this(minProfitThreshold, riskCalculator, null);
+    }
+    
+    @Override
+    public void addExchange(ExchangeService exchange) {
+        if (exchange != null && !exchanges.contains(exchange)) {
+            exchanges.add(exchange);
+            logInfo("Added exchange: " + exchange.getExchangeName());
+        }
+    }
+    
+    @Override
+    public void removeExchange(ExchangeService exchange) {
+        if (exchanges.remove(exchange)) {
+            logInfo("Removed exchange: " + exchange.getExchangeName());
+        }
+    }
+    
+    @Override
+    public List<ExchangeService> getExchanges() {
+        return new ArrayList<>(exchanges);
+    }
+    
+    @Override
+    public void setMinProfitThreshold(double threshold) {
+        this.minProfitThreshold = threshold;
+        logInfo("Set minimum profit threshold to: " + threshold + "%");
+    }
+    
+    @Override
+    public ArbitrageResult scanForOpportunities() {
+        // Check if exchanges are configured
+        if (exchanges.isEmpty()) {
+            logWarning("No exchanges configured for arbitrage scanning");
+            return new ArbitrageResultImpl(new ArrayList<>());
+        }
+        
+        // Map to track which exchanges support each trading pair
+        Map<TradingPair, Set<ExchangeService>> pairExchangeMap = new HashMap<>();
+        
+        // Collect all trading pairs from all exchanges and track supporting exchanges
+        for (ExchangeService exchange : exchanges) {
+            List<TradingPair> exchangePairs = exchange.getTradingPairs();
+            if (exchangePairs == null) {
+                continue;
+            }
+            
+            for (TradingPair pair : exchangePairs) {
+                pairExchangeMap.computeIfAbsent(pair, k -> new HashSet<>()).add(exchange);
+            }
+        }
+        
+        // Filter to pairs available on at least two exchanges (viable for arbitrage)
+        List<TradingPair> viablePairs = pairExchangeMap.entrySet().stream()
+                .filter(entry -> entry.getValue().size() >= 2)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        
+        logInfo("Found " + viablePairs.size() + " trading pairs available on at least two exchanges");
+        
+        return scanForOpportunities(viablePairs);
+    }
+    
+    @Override
+    public ArbitrageResult scanForOpportunities(List<TradingPair> pairs) {
         List<ArbitrageOpportunity> opportunities = new ArrayList<>();
 
-        int numExchanges = exchangeServices.size();
-        // Loop through each pair of exchanges
-        for (int i = 0; i < numExchanges; i++) {
-            ExchangeService serviceA = exchangeServices.get(i);
-            for (int j = i + 1; j < numExchanges; j++) {
-                ExchangeService serviceB = exchangeServices.get(j);
-
-                // Retrieve the cached trading pairs from both exchanges
-                List<TradingPair> pairsA = serviceA.getTradingPairs();
-                List<TradingPair> pairsB = serviceB.getTradingPairs();
-
-                // For each trading pair in serviceA, check if the same pair exists in serviceB
-                for (TradingPair pair : pairsA) {
-                    if (pairsB.contains(pair)) {
-                        // Use a dedicated class to calculate arbitrage between these two exchanges
-                        ExchangeToExchangeArbitrage arbitrage = new ExchangeToExchangeArbitrage(serviceA, serviceB);
-                        ArbitrageOpportunity opportunity = arbitrage.calculateArbitrage(pair);
+        logInfo("Scanning for arbitrage opportunities across " + exchanges.size() + 
+                " exchanges for " + pairs.size() + " trading pairs");
+        
+        // Create arbitrage engines for each exchange pair
+        for (int i = 0; i < exchanges.size(); i++) {
+            for (int j = i + 1; j < exchanges.size(); j++) {
+                ExchangeService exchangeA = exchanges.get(i);
+                ExchangeService exchangeB = exchanges.get(j);
+                
+                ExchangeToExchangeArbitrage arbitrageEngine = new ExchangeToExchangeArbitrage(
+                        exchangeA, exchangeB, riskCalculator, minProfitThreshold, notificationService);
+                
+                // Scan each trading pair
+                for (TradingPair pair : pairs) {
+                    ArbitrageOpportunity opportunity = arbitrageEngine.calculateArbitrage(pair);
                         if (opportunity != null) {
                             opportunities.add(opportunity);
                         }
                     }
                 }
             }
-        }
-        return opportunities;
+        
+        logInfo("Found " + opportunities.size() + " arbitrage opportunities");
+        return new ArbitrageResultImpl(opportunities);
     }
 
-    /**
-     * Placeholder for triangle arbitrage detection.
-     * This method will later be implemented to detect arbitrage opportunities that involve
-     * three currency pairs (or exchanges) simultaneously.
-     *
-     * @return Currently returns an empty list.
-     */
-    public List<ArbitrageOpportunity> detectTriangleArbitrage() {
-        // Future implementation: detect arbitrage opportunities involving three legs.
-        return new ArrayList<>();
-    }
-
-    /**
-     * Evaluates the list of arbitrage opportunities using the risk calculator,
-     * filters out opportunities with unacceptable risk, and then ranks the remaining
-     * opportunities by their profit potential.
-     *
-     * @param opportunities The list of arbitrage opportunities to evaluate.
-     */
-    public void evaluateAndRankOpportunities(List<ArbitrageOpportunity> opportunities) {
-        // Create a list to hold opportunities deemed acceptable after risk evaluation
-        List<ArbitrageOpportunity> acceptableOpportunities = new ArrayList<>();
-
-        for (ArbitrageOpportunity opportunity : opportunities) {
-            // Evaluate each opportunity's risk using the simplified RiskCalculator
-            if (riskCalculator.isOpportunityAcceptable(opportunity)) {
-                acceptableOpportunities.add(opportunity);
-            }
+    @Override
+    public ArbitrageOpportunity calculateArbitrage(
+            IExchangeService fromExchange, IExchangeService toExchange,
+            String tradingPair, double amount, IRiskManager riskManager,
+            INotificationService notificationService) {
+        
+        // Cast to ExchangeService if possible
+        if (!(fromExchange instanceof ExchangeService) || !(toExchange instanceof ExchangeService)) {
+            logError("Cannot calculate arbitrage - unsupported exchange type", 
+                    new IllegalArgumentException("Exchanges must be instance of ExchangeService"));
+            return null;
         }
-
-        // Sort the acceptable opportunities in descending order of potential profit
-        acceptableOpportunities.sort((opp1, opp2) ->
-                Double.compare(opp2.getPotentialProfit(), opp1.getPotentialProfit()));
-
-        // For demonstration, print out the ranked opportunities.
-        for (ArbitrageOpportunity opportunity : acceptableOpportunities) {
-            System.out.println("Arbitrage Opportunity Detected: " + opportunity);
+        
+        ExchangeService from = (ExchangeService) fromExchange;
+        ExchangeService to = (ExchangeService) toExchange;
+        
+        // Create a temporary arbitrage engine for these exchanges
+        ExchangeToExchangeArbitrage arbitrageEngine = new ExchangeToExchangeArbitrage(
+                from, to, (RiskCalculator) riskManager, minProfitThreshold, notificationService);
+        
+        // Calculate arbitrage using the dedicated engine
+        return arbitrageEngine.calculateArbitrage(
+                fromExchange, toExchange, tradingPair, amount, riskManager, notificationService);
+    }
+    
+    /**
+     * Log an info message if notification service is available.
+     *
+     * @param message The message to log
+     */
+    private void logInfo(String message) {
+        if (notificationService != null) {
+            notificationService.logInfo("ArbitrageEngine: " + message);
+        }
+    }
+    
+    /**
+     * Log a warning message if notification service is available.
+     *
+     * @param message The message to log
+     */
+    private void logWarning(String message) {
+        if (notificationService != null) {
+            notificationService.logWarning("ArbitrageEngine: " + message);
+        }
+    }
+    
+    /**
+     * Log an error message if notification service is available.
+     *
+     * @param message The message to log
+     * @param error The exception associated with the error
+     */
+    private void logError(String message, Throwable error) {
+        if (notificationService != null) {
+            notificationService.logError("ArbitrageEngine: " + message, error);
         }
     }
 }
